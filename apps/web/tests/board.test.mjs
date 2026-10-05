@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
@@ -308,4 +308,56 @@ test('boardEntries pairs every claim with its committed verdict', () => {
     assert.equal(entry.claim.id, entry.claim.id)
     if (CORPUS.ok) assert.ok(entry.verdict !== undefined, `${entry.claim.id} has no verdict`)
   }
+})
+
+// ── the snapshot cannot drift from audit/ ───────────────────────────────────
+
+test(
+  'the committed web snapshot still matches audit/index.json',
+  { skip: !CORPUS.ok && 'no audit corpus in this checkout' },
+  () => {
+    // The web app reads audit-data.ts, not the filesystem. If the snapshot drifts from the
+    // corpus, the deployed board would show a Merkle root that does not describe the evidence
+    // in this repository -- the exact failure the product exists to prevent.
+    const onDisk = JSON.parse(readFileSync(join(CORPUS.root, 'index.json'), 'utf8'))
+    assert.equal(CORPUS.index.root, onDisk.root, 'snapshot root differs from audit/index.json')
+    assert.equal(CORPUS.index.version, onDisk.version, 'snapshot version differs')
+    assert.deepEqual(
+      CORPUS.docs.map((d) => [d.docId, d.blob, d.bytes]),
+      Object.entries(onDisk.docs)
+        .map(([docId, e]) => [docId, e.blob, e.bytes])
+        .sort((a, b) => a[0].localeCompare(b[0])),
+      'snapshot documents differ from audit/index.json',
+    )
+    assert.equal(
+      Object.keys(CORPUS.index.claims).length,
+      Object.keys(onDisk.claims).length,
+      'snapshot verdict count differs',
+    )
+  },
+)
+
+test(
+  'every claim on disk is in the snapshot, byte for byte',
+  { skip: !CORPUS.ok && 'no audit corpus in this checkout' },
+  () => {
+    const claimDir = join(CORPUS.root, 'claims')
+    for (const name of readdirSync(claimDir)
+      .filter((f) => f.endsWith('.json'))
+      .sort()) {
+      const onDisk = JSON.parse(readFileSync(join(claimDir, name), 'utf8'))
+      const inSnapshot = CORPUS.claims.find((c) => c.id === onDisk.id)
+      assert.ok(inSnapshot, `${onDisk.id} is on disk but not in the web snapshot`)
+      assert.deepEqual(inSnapshot, onDisk, `${onDisk.id} differs between audit/ and the snapshot`)
+    }
+  },
+)
+
+test('the snapshot needs no filesystem: readCorpus works with no audit/ on disk', () => {
+  // Asserted structurally. `readCorpus` imports only audit-data.ts, so if this file ever
+  // reintroduces an fs import the import list below fails and this test says so.
+  const source = readFileSync(join(WEB, 'lib', 'audit.ts'), 'utf8')
+  assert.doesNotMatch(source, /from 'node:fs'/, 'audit.ts must not read the filesystem')
+  assert.doesNotMatch(source, /from 'node:path'/, 'audit.ts must not resolve paths')
+  assert.equal(CORPUS.ok, true, 'the snapshot alone should satisfy readCorpus')
 })

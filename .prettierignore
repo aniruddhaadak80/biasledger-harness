@@ -16,3 +16,12 @@ CHANGELOG.md
 #
 # This is the reason .prettierignore is load-bearing for correctness rather than tidiness.
 audit/evidence/
+
+# Generated snapshots of audit/, emitted by apps/web/scripts/generate-audit-data.mjs.
+#
+# `check:web-data` compares the generator's output against the committed file byte for byte.
+# If prettier reformatted the committed copy, that comparison could never succeed, and the gate
+# would have to be deleted to make the build pass -- which is worse than an unformatted file.
+# The generator's output IS the canonical form.
+apps/web/lib/audit-data.mjs
+apps/web/lib/audit-data.d.mts

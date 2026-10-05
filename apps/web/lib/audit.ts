@@ -1,17 +1,20 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { join, resolve } from 'node:path'
+import { AUDIT_SNAPSHOT, AUDIT_VERDICTS } from './audit-data.mjs'
 
 /**
  * The web app's data layer.
  *
- * It reads the same git-backed audit corpus the CLI reads — `audit/index.json` and
- * `audit/claims/*.json` — so the deployed page shows this repository's real claims, their real
- * verdicts and their real Merkle root. Nothing here is fixture data or a placeholder, and
- * nothing is computed at request time that could disagree with the committed index.
+ * It reads `audit-data.ts` — a build-time snapshot of the same git-backed corpus the CLI reads
+ * — so the deployed board shows this repository's real claims, their real verdicts and their
+ * real Merkle root. Nothing here is fixture data or a placeholder.
  *
- * The audit root is found by walking upward from the working directory, because the app is
- * deployed with `apps/web` as its root while still being given the whole repository.
+ * **Why a snapshot rather than `readFileSync`.** A serverless function bundle is not the
+ * repository. A route that reads `audit/index.json` at request time works on a laptop and
+ * renders an error state in production, which is the worst possible failure for this product:
+ * a board that silently looks empty. The snapshot removes the filesystem from the request path
+ * entirely, and `tests/board.test.mjs` fails if it drifts from `audit/`.
+ *
+ * See ADR 0003 (the web app has no workspace dependencies) and ADR 0005 (git is the record).
  */
 
 export type ClaimState = 'unverified' | 'evidenced' | 'challenged' | 'attested' | 'withdrawn'
@@ -104,34 +107,6 @@ export function gitBlob(text: string): string {
     .digest('hex')
 }
 
-let cachedRoot: string | undefined
-
-/**
- * Locate `audit/index.json` by walking upward. Cached because every route needs it and the
- * answer cannot change inside one process.
- */
-export function findAuditRoot(start = process.cwd()): string | undefined {
-  if (cachedRoot !== undefined) return cachedRoot === '' ? undefined : cachedRoot
-  let dir = resolve(start)
-  for (let depth = 0; depth < 6; depth += 1) {
-    const candidate = join(dir, 'audit')
-    if (existsSync(join(candidate, 'index.json'))) {
-      cachedRoot = candidate
-      return candidate
-    }
-    const parent = resolve(dir, '..')
-    if (parent === dir) break
-    dir = parent
-  }
-  cachedRoot = ''
-  return undefined
-}
-
-/** Reset the memo. Only tests need this. */
-export function resetAuditRootCache(): void {
-  cachedRoot = undefined
-}
-
 export interface Corpus {
   readonly ok: boolean
   /** Why the corpus is unavailable, when it is. Named, so the page can say what to fix. */
@@ -142,63 +117,45 @@ export interface Corpus {
   readonly docs: readonly { docId: string; blob: string; bytes: number }[]
 }
 
+/**
+ * The snapshot IS the corpus.
+ *
+ * `ok` is false only when the snapshot is structurally unusable -- a build that shipped
+ * without a committed corpus. That is a deployment fault and it is reported as one.
+ */
 export function readCorpus(): Corpus {
-  const root = findAuditRoot()
-  if (root === undefined) {
+  const snap = AUDIT_SNAPSHOT as unknown as {
+    root: string
+    version: number
+    merkleRoot: string
+    commit: string | null
+    docs: readonly { docId: string; blob: string; bytes: number }[]
+    claims: readonly Claim[]
+  }
+
+  if (typeof snap.merkleRoot !== 'string' || snap.merkleRoot === '') {
     return {
       ok: false,
-      problem: 'audit/index.json was not found above the app root',
+      problem:
+        'the committed web snapshot has no Merkle root -- regenerate it with "npm run generate:web-data"',
       claims: [],
       docs: [],
     }
   }
 
-  let index: StoredIndex
-  try {
-    index = JSON.parse(readFileSync(join(root, 'index.json'), 'utf8')) as StoredIndex
-  } catch (cause) {
-    return {
-      ok: false,
-      root,
-      problem: `audit/index.json could not be parsed: ${String(cause)}`,
-      claims: [],
-      docs: [],
-    }
+  if (!Array.isArray(snap.claims)) {
+    return { ok: false, problem: 'the committed web snapshot has no claims array', claims: [], docs: [] }
   }
 
-  if (typeof index.root !== 'string' || index.root === '') {
-    return {
-      ok: false,
-      root,
-      problem: 'audit/index.json has no root — re-publish it with "biasledger index --write"',
-      claims: [],
-      docs: [],
-    }
+  const index: StoredIndex = {
+    version: snap.version,
+    root: snap.merkleRoot,
+    docs: Object.fromEntries(snap.docs.map((d) => [d.docId, { blob: d.blob, bytes: d.bytes }])),
+    claims: AUDIT_VERDICTS as unknown as StoredIndex['claims'],
+    ...(snap.commit === null ? {} : { commit: snap.commit }),
   }
 
-  const claimDir = join(root, 'claims')
-  const claims: Claim[] = []
-  try {
-    for (const name of readdirSync(claimDir)
-      .filter((f) => f.endsWith('.json'))
-      .sort()) {
-      claims.push(JSON.parse(readFileSync(join(claimDir, name), 'utf8')) as Claim)
-    }
-  } catch (cause) {
-    return {
-      ok: false,
-      root,
-      problem: `audit/claims could not be read: ${String(cause)}`,
-      claims: [],
-      docs: [],
-    }
-  }
-
-  const docs = Object.entries(index.docs ?? {})
-    .map(([docId, entry]) => ({ docId, blob: entry.blob, bytes: entry.bytes }))
-    .sort((a, b) => a.docId.localeCompare(b.docId))
-
-  return { ok: true, root, index, claims, docs }
+  return { ok: true, root: snap.root, index, claims: snap.claims, docs: [...snap.docs] }
 }
 
 /** A claim paired with the verdict the committed index recorded for it. */
