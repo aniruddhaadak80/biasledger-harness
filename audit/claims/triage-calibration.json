@@ -1,0 +1,59 @@
+{
+  "id": "triage-calibration",
+  "title": "Triage scores are calibrated within 0.04 ECE across all four reported groups",
+  "system": "triage-net-v3",
+  "state": "evidenced",
+  "note": "",
+  "dimensions": [
+    {
+      "key": "calibration-spread",
+      "required": true,
+      "citations": [
+        {
+          "docId": "calibration-report",
+          "byteStart": 417,
+          "byteEnd": 485
+        },
+        {
+          "docId": "calibration-report",
+          "byteStart": 528,
+          "byteEnd": 584,
+          "expects": "0.008 ECE"
+        }
+      ]
+    },
+    {
+      "key": "missingness",
+      "required": true,
+      "citations": [
+        {
+          "docId": "calibration-report",
+          "byteStart": 689,
+          "byteEnd": 744
+        }
+      ]
+    },
+    {
+      "key": "subgroup-coverage",
+      "required": true,
+      "citations": [
+        {
+          "docId": "calibration-report",
+          "byteStart": 1314,
+          "byteEnd": 1364
+        }
+      ]
+    },
+    {
+      "key": "confidence-intervals",
+      "required": true,
+      "citations": [
+        {
+          "docId": "calibration-report",
+          "byteStart": 1018,
+          "byteEnd": 1040
+        }
+      ]
+    }
+  ]
+}

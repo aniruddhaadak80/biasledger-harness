@@ -1,0 +1,19 @@
+{
+  "id": "pain-score-imputation",
+  "title": "Missing pain_score values are imputed by a documented, reviewed method",
+  "system": "triage-net-v3",
+  "state": "unverified",
+  "note": "Raised 2026-09-30 from the Q2 incident review finding.",
+  "dimensions": [
+    {
+      "key": "imputation-method",
+      "required": true,
+      "citations": []
+    },
+    {
+      "key": "imputation-review",
+      "required": true,
+      "citations": []
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "pediatric-validation",
+  "title": "The model is validated for paediatric intake records",
+  "system": "triage-net-v3",
+  "state": "withdrawn",
+  "note": "Withdrawn 2026-07-02: the model card states the model was not trained on paediatric records, so the claim was never supported.",
+  "dimensions": [
+    {
+      "key": "paediatric-cohort",
+      "required": true,
+      "citations": []
+    },
+    {
+      "key": "paediatric-report",
+      "required": true,
+      "citations": []
+    }
+  ]
+}

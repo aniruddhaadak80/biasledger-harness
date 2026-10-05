@@ -1,0 +1,43 @@
+{
+  "id": "consent-withdrawal",
+  "title": "Subjects can withdraw consent and have their data deleted promptly",
+  "system": "intake-2025H2",
+  "state": "evidenced",
+  "note": "",
+  "dimensions": [
+    {
+      "key": "withdrawal-mechanism",
+      "required": true,
+      "citations": [
+        {
+          "docId": "dataset-statement",
+          "byteStart": 823,
+          "byteEnd": 863
+        }
+      ]
+    },
+    {
+      "key": "deletion-sla",
+      "required": true,
+      "citations": [
+        {
+          "docId": "dataset-statement",
+          "byteStart": 1146,
+          "byteEnd": 1197,
+          "expects": "Deleting a withdrawn participant's rows is completed within 30 days"
+        }
+      ]
+    },
+    {
+      "key": "retention-policy",
+      "required": true,
+      "citations": [
+        {
+          "docId": "dataset-statement",
+          "byteStart": 1350,
+          "byteEnd": 1395
+        }
+      ]
+    }
+  ]
+}

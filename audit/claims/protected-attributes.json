@@ -1,0 +1,36 @@
+{
+  "id": "protected-attributes",
+  "title": "No protected attribute is used as a model feature",
+  "system": "triage-net-v3",
+  "state": "challenged",
+  "note": "Disputed 2026-09-02: reviewer questions whether allow-list enforcement covers batch scoring.",
+  "dimensions": [
+    {
+      "key": "feature-list",
+      "required": true,
+      "citations": [
+        {
+          "docId": "triage-model-card",
+          "byteStart": 753,
+          "byteEnd": 791
+        },
+        {
+          "docId": "triage-model-card",
+          "byteStart": 1025,
+          "byteEnd": 1100
+        }
+      ]
+    },
+    {
+      "key": "proxy-analysis",
+      "required": true,
+      "citations": [
+        {
+          "docId": "triage-model-card",
+          "byteStart": 1536,
+          "byteEnd": 1601
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "name": "clinical-triage",
+  "version": "1.0.0",
+  "description": "The fairness-dimension taxonomy for clinical triage and prioritisation models that rank patients by clinical need.",
+  "enabled": true,
+  "priority": 70,
+  "capabilities": ["dimension_taxonomy.clinical-triage", "corpus.clinical-triage"],
+  "dimensions": [
+    {
+      "key": "calibration",
+      "required": true,
+      "rationale": "A ranking model that is miscalibrated for one group converts an accuracy gap into a harm gap, so calibration must be reported per group rather than in aggregate."
+    },
+    {
+      "key": "evaluation-cohort",
+      "required": true,
+      "rationale": "A per-group figure is meaningless without the cohort it was measured on, including the records excluded for missing inputs."
+    },
+    {
+      "key": "missingness",
+      "required": true,
+      "rationale": "Differential missingness inflates apparent fairness, so the exclusion rate must be published per group."
+    },
+    {
+      "key": "subgroup-coverage",
+      "required": true,
+      "rationale": "A threshold that silently drops small groups makes the model unaudited for exactly the patients with the least data behind them."
+    },
+    {
+      "key": "confidence-intervals",
+      "required": true,
+      "rationale": "Point estimates overstate certainty; overlapping intervals mean an apparent ordering between groups is not a finding."
+    },
+    {
+      "key": "human-oversight",
+      "required": true,
+      "rationale": "An advisory ranking is only as fair as the workflow that consumes it, so the sign-off requirement is part of the fairness claim."
+    },
+    {
+      "key": "protected-attributes",
+      "required": true,
+      "rationale": "Excluding a protected attribute from the feature list does not exclude it from the prediction; proxy behaviour must be measured."
+    },
+    {
+      "key": "consent",
+      "required": true,
+      "rationale": "Training on records whose lawful basis cannot be reconstructed is a governance failure independent of model behaviour."
+    },
+    {
+      "key": "retention",
+      "required": false,
+      "rationale": "Retention is a governance obligation rather than a fairness property, so it is tracked but does not block attestation on its own."
+    }
+  ],
+  "engines": {
+    "@biasledgerharness/core": "0.1.0"
+  }
+}

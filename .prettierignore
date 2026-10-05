@@ -1,0 +1,18 @@
+node_modules
+dist
+.next
+coverage
+.turbo
+package-lock.json
+services/engine/.venv
+CHANGELOG.md
+
+# Evidence artifacts are DATA, not prose.
+#
+# Every citation in audit/claims/ is a byte range into these files, and the Merkle root is a
+# hash of these exact bytes. A formatter that reflows a paragraph or normalises an emphasis
+# marker silently invalidates every citation pointing past the change, and the attestation
+# would then describe bytes that no longer exist on disk.
+#
+# This is the reason .prettierignore is load-bearing for correctness rather than tidiness.
+audit/evidence/

@@ -1,0 +1,31 @@
+{
+  "id": "human-oversight",
+  "title": "Every triage decision is reviewed by a clinician before it is acted on",
+  "system": "triage-net-v3",
+  "state": "attested",
+  "note": "Attested 2026-08-19 against the Q2 incident review.",
+  "dimensions": [
+    {
+      "key": "workflow-mandate",
+      "required": true,
+      "citations": [
+        {
+          "docId": "triage-model-card",
+          "byteStart": 2324,
+          "byteEnd": 2387
+        }
+      ]
+    },
+    {
+      "key": "audit-trail",
+      "required": true,
+      "citations": [
+        {
+          "docId": "incident-review",
+          "byteStart": 1610,
+          "byteEnd": 1670
+        }
+      ]
+    }
+  ]
+}

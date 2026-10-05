@@ -1,0 +1,53 @@
+{
+  "name": "employment-screening",
+  "version": "1.0.0",
+  "description": "The fairness-dimension taxonomy for automated resume screening and candidate ranking used in hiring.",
+  "enabled": true,
+  "priority": 60,
+  "capabilities": ["dimension_taxonomy.employment-screening"],
+  "dimensions": [
+    {
+      "key": "adverse-impact",
+      "required": true,
+      "rationale": "Under four-fifths rule analysis a selection rate gap is the primary statutory test, so the per-group pass rate must be published."
+    },
+    {
+      "key": "feature-provenance",
+      "required": true,
+      "rationale": "Features scraped from free-text resumes carry employer and school signals that act as proxies, so each feature needs a recorded justification."
+    },
+    {
+      "key": "protected-attributes",
+      "required": true,
+      "rationale": "Many jurisdictions prohibit using protected characteristics at all, not merely as a tiebreaker, so exclusion must be enforced at the serving boundary."
+    },
+    {
+      "key": "job-relatedness",
+      "required": true,
+      "rationale": "A feature is only defensible if it predicts performance in the target role, which requires a documented job-relatedness test."
+    },
+    {
+      "key": "small-cohort-disclosure",
+      "required": true,
+      "rationale": "Publishing rates for very small cohorts re-identifies applicants, so suppression and reporting thresholds must be stated."
+    },
+    {
+      "key": "human-oversight",
+      "required": true,
+      "rationale": "Automated screening that reaches a rejection without review is the specific practice most jurisdictions now restrict."
+    },
+    {
+      "key": "appeal",
+      "required": true,
+      "rationale": "An adverse decision a candidate cannot contest is not meaningfully human-reviewed, so the appeal route is part of the claim."
+    },
+    {
+      "key": "consent",
+      "required": false,
+      "rationale": "Applicant consent for automated evaluation varies by jurisdiction and is tracked but does not block attestation on its own."
+    }
+  ],
+  "engines": {
+    "@biasledgerharness/core": "0.1.0"
+  }
+}
