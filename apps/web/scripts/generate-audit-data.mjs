@@ -65,7 +65,10 @@ const docs = Object.entries(index.docs ?? {})
   .sort((a, b) => a.docId.localeCompare(b.docId))
 
 const payload = {
-  root,
+  // Repository-relative, never absolute. An absolute path here would leak the build machine's
+  // filesystem layout into the production health response, and name a directory that does not
+  // exist in a serverless runtime.
+  root: 'audit',
   version: index.version ?? 1,
   merkleRoot: index.root,
   commit: index.commit ?? null,

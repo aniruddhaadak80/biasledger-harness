@@ -12,7 +12,7 @@
  */
 
 export const AUDIT_SNAPSHOT = {
-  "root": "C:\\Users\\ANIRUDDHA\\Desktop\\Projects\\biasledger-harness\\audit",
+  "root": "audit",
   "version": 1,
   "merkleRoot": "252aa61853ae3f6469c87e34089128b9d6041f53ea931036fc5bbd6d4aac1cb4",
   "commit": null,

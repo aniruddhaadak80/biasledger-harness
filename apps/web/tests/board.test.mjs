@@ -19,6 +19,8 @@ import { backedDimensions, shortBlob, stateTone, verdictTone } from '../lib/pres
 
 const WEB = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const REPO = resolve(WEB, '..', '..')
+/** The corpus on disk. The snapshot records it repo-relative, so tests resolve it themselves. */
+const AUDIT = join(REPO, 'audit')
 const CORPUS = readCorpus()
 
 function verdictFixture(overrides = {}) {
@@ -291,7 +293,7 @@ test(
   { skip: !CORPUS.ok && 'no audit corpus in this checkout' },
   () => {
     for (const doc of CORPUS.docs) {
-      const text = readFileSync(join(CORPUS.root, 'evidence', `${doc.docId}.md`), 'utf8')
+      const text = readFileSync(join(AUDIT, 'evidence', `${doc.docId}.md`), 'utf8')
       assert.equal(gitBlob(text), doc.blob, `${doc.docId} drifted from the committed index`)
     }
   },
@@ -319,7 +321,7 @@ test(
     // The web app reads audit-data.ts, not the filesystem. If the snapshot drifts from the
     // corpus, the deployed board would show a Merkle root that does not describe the evidence
     // in this repository -- the exact failure the product exists to prevent.
-    const onDisk = JSON.parse(readFileSync(join(CORPUS.root, 'index.json'), 'utf8'))
+    const onDisk = JSON.parse(readFileSync(join(AUDIT, 'index.json'), 'utf8'))
     assert.equal(CORPUS.index.root, onDisk.root, 'snapshot root differs from audit/index.json')
     assert.equal(CORPUS.index.version, onDisk.version, 'snapshot version differs')
     assert.deepEqual(
@@ -341,7 +343,7 @@ test(
   'every claim on disk is in the snapshot, byte for byte',
   { skip: !CORPUS.ok && 'no audit corpus in this checkout' },
   () => {
-    const claimDir = join(CORPUS.root, 'claims')
+    const claimDir = join(AUDIT, 'claims')
     for (const name of readdirSync(claimDir)
       .filter((f) => f.endsWith('.json'))
       .sort()) {
