@@ -137,10 +137,14 @@ def blob_for(text: str) -> str:
 # ---------------------------------------------------------------- tokenizer
 
 
+#: Line feed, in the only place a raw byte value belongs.
+NEWLINE: Final[int] = 0x0A
+
+
 def line_starts(data: bytes) -> list[int]:
     starts = [0]
     for offset, byte in enumerate(data):
-        if byte == 0x0A:
+        if byte == NEWLINE:
             starts.append(offset + 1)
     return starts
 

@@ -35,9 +35,24 @@ after a three-minute build.
 | `check:boundaries`      | a package imports another package's undeclared deep path         |
 | `check:public-hygiene`  | junk files, committed caches, oversized binaries, leftover TODOs |
 | `check:readme-commands` | the README names a command that does not exist                   |
+| `check:web-data`        | the committed web snapshot has drifted from `audit/`             |
 
 Each failure prints the file, the line, and the fix. A gate that only says "failed" wastes the
 person running it.
+
+## The Python gates
+
+`npm run check` also runs the three Python gates, because CI runs them and a local gate that
+omits a check CI enforces is worse than no local gate:
+
+| Gate             | Fails when                                             |
+| ---------------- | ------------------------------------------------------ |
+| `npm run pytest` | any engine test fails, including the golden-file tests |
+| `npm run mypy`   | the engine is not `mypy --strict` clean                |
+| `npm run ruff`   | the engine trips a lint rule                           |
+
+These were added after CI caught three `mypy --strict` errors that every local gate had passed,
+which is the whole argument for running the same checks locally.
 
 ## Supply chain
 

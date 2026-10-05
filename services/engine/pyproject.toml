@@ -47,10 +47,11 @@ ignore = [
   "E501",    # line length is the formatter's job
   "B008",
   "S101",    # assert is fine in tests
+  "S324",    # sha1 is not a choice here: a git blob id IS sha1 over "blob <len>\0" + bytes
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "PLR2004"]
+"tests/*" = ["S101", "S324", "PLR2004"]
 
 [tool.mypy]
 python_version = "3.11"

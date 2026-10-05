@@ -40,7 +40,7 @@ class TestBlob:
 
     def test_is_multibyte_aware(self) -> None:
         text = "café"
-        expected = hashlib.sha1(b"blob 5\x00" + "café".encode("utf-8")).hexdigest()
+        expected = hashlib.sha1(b"blob 5\x00" + "café".encode()).hexdigest()
         assert blob_for(text) == expected
 
 
@@ -69,7 +69,7 @@ class TestTokenizer:
 
     def test_non_ascii_bytes_are_boundaries(self) -> None:
         # A multi-byte character must not be sliced into the middle of a span.
-        tokens = tokenize("café bar".encode("utf-8"))
+        tokens = tokenize("café bar".encode())
         assert [raw.decode() for raw, _, _ in tokens] == ["caf", "bar"]
 
     @settings(max_examples=50, deadline=None)

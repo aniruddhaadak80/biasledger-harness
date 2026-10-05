@@ -128,18 +128,59 @@ class Decision(TypedDict):
     reason: str
 
 
+class Document(TypedDict):
+    """One evidence artifact, decoded once.
+
+    The byte buffer and its line table are computed per document rather than per citation: a
+    claim with forty citations against one document should decode that document once.
+    """
+
+    doc_id: str
+    blob: str
+    data: bytes
+    starts: list[int]
+
+
+def make_document(doc_id: str, blob: str, text: str) -> Document:
+    data = text.encode("utf-8")
+    return {"doc_id": doc_id, "blob": blob, "data": data, "starts": line_starts(data)}
+
+
+def missing_document(doc_id: str, byte_start: int, byte_end: int) -> SpanResult:
+    """The result for a citation pointing at a document that was not supplied."""
+    return {
+        "docId": doc_id,
+        "blob": "",
+        "byteStart": byte_start,
+        "byteEnd": byte_end,
+        "docBytes": 0,
+        "line": 0,
+        "valid": False,
+        "reason": "unknown-document",
+        "text": "",
+        "spanSha256": "",
+    }
+
+
 # ---------------------------------------------------------------- shape guards
 
 
-def _require_claim(payload: Any) -> Claim:
+def _require_claim(payload: Any) -> Claim:  # noqa: PLR0912
+    """Validate an untrusted claim record against the engine's contract.
+
+    The branch count is inherent: this walks a nested, untrusted document and every distinct
+    failure gets its own code and its own message, because the message is what a reviewer reads
+    when a claim will not load. Compressing the checks into a loop would lose the field paths
+    that make the error actionable.
+    """
     if not isinstance(payload, dict):
         raise EngineError("BAD_SHAPE", "expected an object with a 'claim'")
     claim = payload.get("claim")
     if not isinstance(claim, dict):
         raise EngineError("BAD_SHAPE", "'claim' must be an object")
-    for key in ("id", "title", "state", "dimensions"):
-        if key not in claim:
-            raise EngineError("MISSING_FIELD", f"claim is missing {key!r}")
+    for field in ("id", "title", "state", "dimensions"):
+        if field not in claim:
+            raise EngineError("MISSING_FIELD", f"claim is missing {field!r}")
     if not isinstance(claim["id"], str) or not claim["id"]:
         raise EngineError("BAD_SHAPE", "claim.id must be a non-empty string")
     if not isinstance(claim["title"], str):
@@ -157,7 +198,9 @@ def _require_claim(payload: Any) -> Claim:
             raise EngineError("BAD_SHAPE", f"claim.dimensions[{index}] must be an object")
         key = dimension.get("key")
         if not isinstance(key, str) or not key:
-            raise EngineError("BAD_SHAPE", f"claim.dimensions[{index}].key must be a non-empty string")
+            raise EngineError(
+                "BAD_SHAPE", f"claim.dimensions[{index}].key must be a non-empty string"
+            )
         if key in seen:
             raise EngineError("DUPLICATE_DIMENSION", f"dimension {key!r} appears more than once")
         seen.add(key)
@@ -200,20 +243,22 @@ def _require_claim(payload: Any) -> Claim:
 # ---------------------------------------------------------------- span verification
 
 
-def check_span(
-    data: bytes,
-    starts: list[int],
-    doc_id: str,
-    blob: str,
-    byte_start: int,
-    byte_end: int,
-    expected: str | None,
+def check_span(  # noqa: PLR0911
+    document: Document, byte_start: int, byte_end: int, expected: str | None
 ) -> SpanResult:
     """Verify one byte range against one document. Never raises for a bad range.
 
     A citation that cannot be resolved is a *finding*, not an exception: "this claim points
     at bytes that do not exist" is exactly what the audit exists to surface.
+
+    One early return per failure reason, deliberately. The reasons are a closed vocabulary that
+    the board colours and the tests assert on, so each is a named exit rather than a branch
+    folded into a single accumulating result.
     """
+    data = document["data"]
+    doc_id = document["doc_id"]
+    blob = document["blob"]
+    starts = document["starts"]
     doc_bytes = len(data)
 
     def failure(reason: str, text: str = "") -> SpanResult:
@@ -285,7 +330,8 @@ def verify_span(payload: Any) -> SpanResult:
         raise EngineError("BAD_SHAPE", "doc.docId must be a non-empty string")
 
     text = doc["text"]
-    blob = doc.get("blob") if isinstance(doc.get("blob"), str) else blob_for(text)
+    supplied_blob = doc.get("blob")
+    blob = supplied_blob if isinstance(supplied_blob, str) else blob_for(text)
     byte_start = payload.get("byteStart")
     byte_end = payload.get("byteEnd")
     if not isinstance(byte_start, int) or isinstance(byte_start, bool):
@@ -296,8 +342,12 @@ def verify_span(payload: Any) -> SpanResult:
     if expected is not None and not isinstance(expected, str):
         raise EngineError("BAD_SHAPE", "'expected' must be a string when present")
 
-    data = text.encode("utf-8")
-    return check_span(data, line_starts(data), doc_id, blob, byte_start, byte_end, expected)
+    return check_span(
+        make_document(doc_id, blob, text),
+        byte_start,
+        byte_end,
+        expected if isinstance(expected, str) else None,
+    )
 
 
 # ---------------------------------------------------------------- evaluation
@@ -313,13 +363,48 @@ def evaluate_claim(payload: Any) -> Verdict:
     whatever happened to be in the folder.
     """
     claim = _require_claim(payload)
-    docs = payload.get("docs")
+    corpus = _load_corpus(payload.get("docs"))
+    tally = _evaluate_dimensions(claim, corpus)
+
+    verdict = _classify(tally)
+    coverage = (
+        round(tally["required_covered"] / tally["required_total"], _COVERAGE_SCALE)
+        if tally["required_total"]
+        else 0.0
+    )
+
+    # The root covers exactly the documents the verdict depends on -- not the whole folder.
+    root = reduce_root(_index_for(tally["cited_docs"], corpus))
+
+    return {
+        "claimId": claim["id"],
+        "verdict": verdict,
+        "dimensionsTotal": tally["total_dimensions"],
+        "dimensionsRequired": tally["required_total"],
+        "dimensionsCovered": tally["covered_dimensions"],
+        "coverage": coverage,
+        "citationsChecked": tally["checked"],
+        "citationsValid": tally["valid"],
+        "citationsInvalid": tally["checked"] - tally["valid"],
+        "attestedOver": tally["attested_over"],
+        "root": root,
+        "gaps": tally["gaps"],
+        "spans": tally["spans"],
+    }
+
+
+def _load_corpus(docs: Any) -> dict[str, Document]:
+    """Decode every supplied document once.
+
+    Each document is decoded a single time, so a claim with many citations against the same
+    artifact does not re-encode it per citation.
+    """
     if docs is None:
         docs = []
     if not isinstance(docs, list):
         raise EngineError("BAD_SHAPE", "'docs' must be an array")
 
-    corpus: dict[str, tuple[str, bytes, list[int]]] = {}
+    corpus: dict[str, Document] = {}
     for index, doc in enumerate(docs):
         if not isinstance(doc, dict):
             raise EngineError("BAD_SHAPE", f"docs[{index}] must be an object")
@@ -331,62 +416,74 @@ def evaluate_claim(payload: Any) -> Verdict:
             raise EngineError("BAD_SHAPE", f"docs[{index}].text must be a string")
         if doc_id in corpus:
             raise EngineError("DUPLICATE_DOC", f"docId {doc_id!r} appears more than once")
-        blob = doc.get("blob") if isinstance(doc.get("blob"), str) else blob_for(text)
-        data = text.encode("utf-8")
-        corpus[doc_id] = (blob, data, line_starts(data))
+        supplied = doc.get("blob")
+        blob = supplied if isinstance(supplied, str) else blob_for(text)
+        corpus[doc_id] = make_document(doc_id, blob, text)
+    return corpus
 
-    spans: list[Span] = []
-    gaps: list[Gap] = []
-    checked = 0
-    valid = 0
-    cited_docs: set[str] = set()
-    required_total = 0
-    required_covered = 0
-    total_dimensions = 0
-    covered_dimensions = 0
+
+class Tally(TypedDict):
+    """Everything the verdict is derived from, accumulated in one pass over the claim."""
+
+    total_dimensions: int
+    required_total: int
+    covered_dimensions: int
+    required_covered: int
+    checked: int
+    valid: int
+    cited_docs: list[str]
+    attested_over: list[str]
+    gaps: list[Gap]
+    spans: list[Span]
+
+
+def _resolve_citation(citation: Citation, corpus: dict[str, Document]) -> SpanResult:
+    """Resolve one citation, or explain why it cannot be resolved."""
+    doc_id = citation["docId"]
+    document = corpus.get(doc_id)
+    if document is None:
+        return missing_document(doc_id, citation["byteStart"], citation["byteEnd"])
+    expects = citation.get("expects")
+    return check_span(
+        document,
+        citation["byteStart"],
+        citation["byteEnd"],
+        expects if isinstance(expects, str) else None,
+    )
+
+
+def _evaluate_dimensions(claim: Claim, corpus: dict[str, Document]) -> Tally:
+    """One pass over the claim, resolving every citation exactly once."""
+    tally: Tally = {
+        "total_dimensions": 0,
+        "required_total": 0,
+        "covered_dimensions": 0,
+        "required_covered": 0,
+        "checked": 0,
+        "valid": 0,
+        "cited_docs": [],
+        "attested_over": [],
+        "gaps": [],
+        "spans": [],
+    }
+    cited: set[str] = set()
 
     for dimension in claim["dimensions"]:
-        total_dimensions += 1
+        tally["total_dimensions"] += 1
         key = dimension["key"]
         required = dimension["required"]
         if required:
-            required_total += 1
+            tally["required_total"] += 1
 
         dimension_valid = 0
         for citation in dimension["citations"]:
-            checked += 1
-            doc_id = citation["docId"]
-            entry = corpus.get(doc_id)
-            if entry is None:
-                result: SpanResult = {
-                    "docId": doc_id,
-                    "blob": "",
-                    "byteStart": citation["byteStart"],
-                    "byteEnd": citation["byteEnd"],
-                    "docBytes": 0,
-                    "line": 0,
-                    "valid": False,
-                    "reason": "unknown-document",
-                    "text": "",
-                    "spanSha256": "",
-                }
-            else:
-                blob, data, starts = entry
-                expects = citation.get("expects")
-                result = check_span(
-                    data,
-                    starts,
-                    doc_id,
-                    blob,
-                    citation["byteStart"],
-                    citation["byteEnd"],
-                    expects if isinstance(expects, str) else None,
-                )
+            tally["checked"] += 1
+            result = _resolve_citation(citation, corpus)
             if result["valid"]:
-                valid += 1
+                tally["valid"] += 1
                 dimension_valid += 1
-                cited_docs.add(doc_id)
-            spans.append(
+                cited.add(citation["docId"])
+            tally["spans"].append(
                 {
                     "dimension": key,
                     "docId": result["docId"],
@@ -401,11 +498,11 @@ def evaluate_claim(payload: Any) -> Verdict:
             )
 
         if dimension_valid > 0:
-            covered_dimensions += 1
+            tally["covered_dimensions"] += 1
             if required:
-                required_covered += 1
+                tally["required_covered"] += 1
         else:
-            gaps.append(
+            tally["gaps"].append(
                 {
                     "dimension": key,
                     "reason": "no-citation"
@@ -414,46 +511,37 @@ def evaluate_claim(payload: Any) -> Verdict:
                 }
             )
 
-    attested_over = sorted(cited_docs)
-    if required_total == 0:
-        verdict = "unsubstantiated"
-    elif required_covered == required_total and valid == checked:
-        verdict = "attestable"
-    elif required_covered > 0:
-        verdict = "partial"
-    else:
-        verdict = "unsubstantiated"
-
-    coverage = round(required_covered / required_total, _COVERAGE_SCALE) if required_total else 0.0
-
-    # The root covers exactly the documents the verdict depends on.
-    root = reduce_root(_index_for(attested_over, corpus)) if attested_over else reduce_root(
-        {"version": 1, "terms": {}, "docBytes": {}}
-    )
-
-    return {
-        "claimId": claim["id"],
-        "verdict": verdict,
-        "dimensionsTotal": total_dimensions,
-        "dimensionsRequired": required_total,
-        "dimensionsCovered": covered_dimensions,
-        "coverage": coverage,
-        "citationsChecked": checked,
-        "citationsValid": valid,
-        "citationsInvalid": checked - valid,
-        "attestedOver": attested_over,
-        "root": root,
-        "gaps": gaps,
-        "spans": spans,
-    }
+    tally["cited_docs"] = sorted(cited)
+    tally["attested_over"] = sorted(cited)
+    return tally
 
 
-def _index_for(doc_ids: list[str], corpus: dict[str, tuple[str, bytes, list[int]]]) -> Any:
+def _classify(tally: Tally) -> str:
+    """The verdict, as a pure function of the tally.
+
+    `attestable` requires every required dimension covered AND no invalid citation anywhere.
+    The second condition is stricter than it looks and is deliberate: a claim that happens to
+    have all its required dimensions backed but also carries one broken citation is not a
+    claim whose evidence is intact.
+    """
+    if tally["required_total"] == 0:
+        return "unsubstantiated"
+    if tally["required_covered"] == tally["required_total"] and tally["valid"] == tally["checked"]:
+        return "attestable"
+    if tally["required_covered"] > 0:
+        return "partial"
+    return "unsubstantiated"
+
+
+
+def _index_for(doc_ids: list[str], corpus: dict[str, Document]) -> Any:
     """A minimal inverted index over just the cited documents."""
     documents = {}
     for doc_id in doc_ids:
-        blob, data, _ = corpus[doc_id]
-        documents[doc_id] = index_document(doc_id, blob, data.decode("utf-8"))
+        document = corpus[doc_id]
+        documents[doc_id] = index_document(
+            doc_id, document["blob"], document["data"].decode("utf-8")
+        )
     return merge(documents)
 
 
@@ -464,7 +552,7 @@ def legal_targets(state: str) -> list[str]:
     return list(TRANSITIONS.get(state, ()))
 
 
-def transition(payload: Any) -> Decision:
+def transition(payload: Any) -> Decision:  # noqa: PLR0911, PLR0912
     """Engine op: decide whether a claim may move to a new state.
 
     Refuses in four cases, each with its own reason: an unknown state, an unlisted
