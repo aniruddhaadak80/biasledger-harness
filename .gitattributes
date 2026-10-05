@@ -1,26 +1,25 @@
-# Evidence artifacts are content-addressed. Their bytes are the product's input, so git must
-# not transform them.
+# Rule order matters here: in .gitattributes the LAST matching pattern wins, so the general rule
+# comes first and every specific override comes after it.
+#
+# The default: normalise to LF in the repository, CRLF in the working tree.
+* text=auto eol=lf
+
+# Evidence artifacts are content-addressed, and their bytes are the product's input.
 #
 # With core.autocrlf=true (the Windows default), a fresh clone converted these files from LF to
 # CRLF. That changed every byte after the first line ending, which silently invalidated every
 # citation in audit/claims/ and made `biasledger root` report drift for anyone who cloned on
-# Windows. Verified with a clone-and-hash test.
+# Windows. `-text` disables EOL conversion and text normalisation in both directions, so the blob
+# in the repository is byte-identical to the working tree on every platform.
 #
-# -text disables EOL conversion and text normalisation for these paths in both directions: the
-# blob in the repository is byte-identical to the working tree on every platform.
-#
-# Note: git does not support inline `#` comments on an attribute line. Everything after the
-# attribute list is parsed as another attribute, so comments live on their own lines above.
+# Verified with a clone-and-hash test, not assumed.
 audit/evidence/** -text -diff
 
-# The committed attestation. Its bytes are referenced by the root, and a reviewer recomputes
-# that root from it offline, so it must round-trip exactly.
+# The committed attestation. Its bytes are referenced by the Merkle root, and a reviewer
+# recomputes that root from this file alone with no access to the documents.
 audit/index.json -text
 
-# The rest of the repository normalises to LF in the repository, and CRLF in the working tree.
-* text=auto eol=lf
-
-# Shell scripts must keep LF: a CRLF shebang does not execute on Unix.
+# Shell scripts keep LF: a CRLF shebang does not execute on Unix.
 *.sh text eol=lf
 services/engine/src/** text eol=lf
 
@@ -28,3 +27,6 @@ services/engine/src/** text eol=lf
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+
+# Note: git does not support inline `#` comments on an attribute line -- everything after the
+# attribute list is parsed as another attribute. Comments must be on their own lines.
