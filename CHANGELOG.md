@@ -28,6 +28,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A disabled plugin could take a capability away from an enabled one.** Capability
+  resolution claimed capabilities for every valid plugin and only then filtered the result
+  to the active ones, so a plugin with `"enabled": false` still won its capability claims. A
+  lower-priority enabled plugin claiming the same capability was reported as shadowed and
+  skipped outright, so switching a plugin off silently removed the capability for everyone
+  rather than handing it to the next claimant. Disabled plugins are now skipped before they
+  claim anything.
 - **The engine decoded stdin with the platform locale.** On Windows that is `cp1252`, so a
   three-byte UTF-8 character became three characters and then eight bytes, shifting every byte
   offset after the first non-ASCII character in every document. `protocol.py` now reads and writes
