@@ -28,6 +28,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The web app could not be deployed at all.** The Vercel project runs the `Services` framework,
+  which requires a root `vercel.json` declaring a `services` map. That file was never committed,
+  so every build aborted with `[MISSING_SERVICES]` before it installed a single dependency. The
+  root `vercel.json` now declares the web app as a service rooted at `apps/web` and routes all
+  traffic to it. The service installs from the committed lockfile rather than resolving fresh
+  versions, so the deployed build is the one the tests ran against.
 - **A disabled plugin could take a capability away from an enabled one.** Capability
   resolution claimed capabilities for every valid plugin and only then filtered the result
   to the active ones, so a plugin with `"enabled": false` still won its capability claims. A
