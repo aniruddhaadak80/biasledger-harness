@@ -58,6 +58,25 @@ describe('buildRegistry', () => {
     expect(result.disabled.map((p) => p.manifest.name)).toEqual(['off'])
   })
 
+  it('does not let a disabled plugin claim a capability away from an enabled one', () => {
+    // A disabled plugin is loaded but inactive. It must not win the capability claim,
+    // because a plugin it shadows is skipped outright and never becomes active -- so
+    // turning a plugin off would silently remove the capability for everyone.
+    const root = fixture()
+    plugin(root, 'off', {
+      ...base,
+      name: 'off',
+      enabled: false,
+      priority: 90,
+      capabilities: ['scan'],
+    })
+    plugin(root, 'on', { ...base, name: 'on', enabled: true, priority: 10, capabilities: ['scan'] })
+    const result = buildRegistry(root)
+    expect(result.active.map((p) => p.manifest.name)).toEqual(['on'])
+    expect(result.disabled.map((p) => p.manifest.name)).toEqual(['off'])
+    expect(result.active[0]?.shadowed).toEqual([])
+  })
+
   it('rejects a plugin whose engine range does not match', () => {
     const root = fixture()
     plugin(root, 'p', { ...base, name: 'p', engines: { '@x/core': '^2.0.0' } })

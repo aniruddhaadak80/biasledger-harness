@@ -47,6 +47,11 @@ export function buildRegistry(root = 'plugins', engineVersions: Record<string, s
   const claims = new Map<string, ResolvedPlugin>()
   const active: ResolvedPlugin[] = []
   for (const plugin of valid) {
+    // A disabled plugin is loaded but inactive, so it must not claim a capability at all.
+    // Claiming one shadows the enabled plugin behind it, which is then skipped outright and
+    // never becomes active -- so switching a plugin off would silently take the capability
+    // away from everyone rather than handing it to the next claimant.
+    if (!plugin.manifest.enabled) continue
     const clashes = plugin.manifest.capabilities.filter((c) => claims.has(c))
     if (clashes.length > 0) {
       const winner = claims.get(clashes[0] as string)
@@ -54,7 +59,7 @@ export function buildRegistry(root = 'plugins', engineVersions: Record<string, s
       continue
     }
     for (const capability of plugin.manifest.capabilities) claims.set(capability, plugin)
-    if (plugin.manifest.enabled) active.push(plugin)
+    active.push(plugin)
   }
 
   return { active, disabled: valid.filter((p) => !p.manifest.enabled), rejected }
